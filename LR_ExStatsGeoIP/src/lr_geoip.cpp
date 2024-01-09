@@ -38,7 +38,6 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 	char sQuery[1024], sCity[45], sRegion[45], sCountry[45], sCountryCode[3];
 	auto playerNetInfo = engine->GetPlayerNetInfo(iSlot);
 	if(playerNetInfo == nullptr) {
-		Msg("DEBUG LOX\n");
 		return;
 	}
 	auto sIp2 = std::string(playerNetInfo->GetAddress());
@@ -47,7 +46,6 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 	MMDB_s mmdb;
 	char szPath[256];
 	int iSize = g_SMAPI->PathFormat(szPath, sizeof(szPath), "%s/addons/configs/geoip/GeoLite2-City.mmdb", g_SMAPI->GetBaseDir());
-	Msg("DEBUG: %s | %s\n", szPath, sIp.c_str());
     int status = MMDB_open(szPath, MMDB_MODE_MMAP, &mmdb);
 
     if (status != MMDB_SUCCESS) {
