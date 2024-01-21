@@ -68,6 +68,7 @@ void lr_vip_multi::AllPluginsLoaded()
 		return;
 	}
 	g_pLRCore->HookOnCoreIsReady(g_PLID, OnCoreIsReadyHook);
+	g_pVIPCore->VIP_RegisterFeature("LrBoost", VIP_BOOL, TOGGLABLE);
 }
 
 const char *lr_vip_multi::GetLicense()
