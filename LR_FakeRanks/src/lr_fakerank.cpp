@@ -64,9 +64,9 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 			CPlayerSlot PlayerSlot = CPlayerSlot(i);
 			filter.AddRecipient(PlayerSlot);
 		}
-		INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
-		auto* message = new CCSUsrMsg_ServerRankRevealAll;
-		g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, message, 0);
+		static INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
+		CCSUsrMsg_ServerRankRevealAll message;
+		g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
 	}
 }
 

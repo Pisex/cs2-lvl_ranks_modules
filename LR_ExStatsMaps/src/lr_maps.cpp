@@ -214,8 +214,11 @@ void Hooks(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 			{
 				int iAttacker = pEvent->GetInt("attacker");
 				int iClient = pEvent->GetInt("userid");
-				g_iMapCount_Kills[iAttacker]++;
-				g_iMapCount_Deaths[iClient]++;
+				if(iAttacker >= 0 && iAttacker <= 64 && iClient <= 64 && iClient >= 0 && iAttacker != iClient)
+				{
+					g_iMapCount_Kills[iAttacker]++;
+					g_iMapCount_Deaths[iClient]++;
+				}
 				break;
 			}
 
@@ -248,10 +251,13 @@ void Hooks(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 			case 'b':
 			{
 				int iClient = pEvent->GetInt("userid");
-				switch(szName[6])
+				if(iClient >= 0 && iClient <= 64)
 				{
-					case 'l': g_iMapCount_BPlanted[iClient]++;
-					case 'e': g_iMapCount_BDefused[iClient]++;
+					switch(szName[6])
+					{
+						case 'l': g_iMapCount_BPlanted[iClient]++;
+						case 'e': g_iMapCount_BDefused[iClient]++;
+					}
 				}
 				break;
 			}
@@ -259,10 +265,13 @@ void Hooks(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 			case 'h':
 			{
 				int iClient = pEvent->GetInt("userid");
-				switch(szName[8])
+				if(iClient >= 0 && iClient <= 64)
 				{
-					case 'k': g_iMapCount_HKilled[iClient]++;
-					case 'r': g_iMapCount_HRescued[iClient]++;
+					switch(szName[8])
+					{
+						case 'k': g_iMapCount_HKilled[iClient]++;
+						case 'r': g_iMapCount_HRescued[iClient]++;
+					}
 				}
 				break;
 			}
