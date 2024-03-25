@@ -139,7 +139,7 @@ const char *lr_ge::GetDate()
 
 const char *lr_ge::GetLogTag()
 {
-	return "[LR-Hits]";
+	return "[LR-GE]";
 }
 
 const char *lr_ge::GetAuthor()
@@ -154,7 +154,7 @@ const char *lr_ge::GetDescription()
 
 const char *lr_ge::GetName()
 {
-	return "[LR] ExStats Hits";
+	return "[LR] Give Exp";
 }
 
 const char *lr_ge::GetURL()
