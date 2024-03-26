@@ -26,6 +26,8 @@ SH_DECL_HOOK3_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
 
 // int g_iValue[64];
 
+uint64_t iOldButtons[64];
+
 int g_iType;
 bool bLoaded = false;
 std::map<int, int> g_Ranks;
@@ -128,11 +130,14 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 {
 	if(bLoaded)
 	{
+		CRecipientFilter filter;
+		bool bSend = false;
 		for (int i = 0; i < 64; i++)
 		{
 			CCSPlayerController* pPlayerController =  (CCSPlayerController *)g_pEntitySystem->GetBaseEntity((CEntityIndex)(i + 1));
 			if(!pPlayerController || !pPlayerController->m_hPawn() || !pPlayerController->m_hPlayerPawn()) continue;
-			if(pPlayerController->m_steamID() <= 0) continue;
+			if(pPlayerController->m_steamID() <= 0)
+				continue;
 			switch (g_iType)
 			{
 			case 11:
@@ -148,18 +153,23 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 				pPlayerController->m_iCompetitiveRankType() = g_iType;
 				break;
 			}
-			if(std::to_string(pPlayerController->m_hPlayerPawn()->m_pMovementServices()->m_nButtons().m_pButtonStates()[0]).find("858993") != std::string::npos)
+			uint64_t iButtons = pPlayerController->m_hPlayerPawn()->m_pMovementServices()->m_nButtons().m_pButtonStates()[0];
+			if(std::to_string(iButtons).find("858993") != std::string::npos && !(std::to_string(iOldButtons[i]).find("858993") != std::string::npos))
 			{
-				CRecipientFilter filter;
+				bSend = true;
 				CPlayerSlot PlayerSlot = CPlayerSlot(i);
 				filter.AddRecipient(PlayerSlot);
-				static INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
-				CCSUsrMsg_ServerRankRevealAll message;
-				g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
 			}
+			iOldButtons[i] = iButtons;
 			// Msg("DEBUG %i | %i | %i\n", g_pLRCore->GetClientInfo(i, ST_RANK), g_Ranks[g_pLRCore->GetClientInfo(i, ST_RANK)], g_iType);
 			// pPlayerController->m_iCompetitiveRanking() = g_iValue[i];
 			// pPlayerController->m_iCompetitiveRankType() = 7;
+		}
+		if(bSend)
+		{
+			static INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
+			CCSUsrMsg_ServerRankRevealAll message;
+			g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
 		}
 	}
 }
