@@ -28,13 +28,13 @@ class CRecipientFilter : public IRecipientFilter
 public:
 	CRecipientFilter()
 	{
-		m_bReliable = true;
+		m_nBufType = BUF_RELIABLE;
 		m_bInitMessage = false;
 	}
 
 	CRecipientFilter(IRecipientFilter *source, int iExcept = -1)
 	{
-		m_bReliable = source->IsReliable();
+		m_nBufType = source->GetNetworkBufType();
 		m_bInitMessage = source->IsInitMessage();
 		m_Recipients.RemoveAll();
 
@@ -47,7 +47,7 @@ public:
 
 	~CRecipientFilter() override {}
 
-	bool IsReliable(void) const override { return m_bReliable; }
+	NetChannelBufType_t GetNetworkBufType(void) const override { return m_nBufType; }
 	bool IsInitMessage(void) const override { return m_bInitMessage; }
 	int GetRecipientCount(void) const override { return m_Recipients.Count(); }
 
@@ -69,7 +69,7 @@ public:
 	}
 
 private:
-	bool m_bReliable;
+	NetChannelBufType_t m_nBufType;
 	bool m_bInitMessage;
 	CUtlVectorFixed<CPlayerSlot, 64> m_Recipients;
 };

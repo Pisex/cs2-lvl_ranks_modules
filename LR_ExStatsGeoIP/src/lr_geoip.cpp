@@ -11,7 +11,6 @@ IMySQLConnection* g_pConnection;
 IUtilsApi* g_pUtils;
 
 IVEngineServer2* engine = nullptr;
-CSchemaSystem* g_pCSchemaSystem = nullptr;
 CGameEntitySystem* g_pGameEntitySystem = nullptr;
 CEntitySystem* g_pEntitySystem = nullptr;
 
@@ -21,7 +20,6 @@ PLUGIN_EXPOSE(lr_geoip, g_lr_geoip);
 bool lr_geoip::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
-	GET_V_IFACE_ANY(GetEngineFactory, g_pCSchemaSystem, CSchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	g_SMAPI->AddListener( this, this );
 	return true;
@@ -82,7 +80,7 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
     MMDB_close(&mmdb);
 
 	g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT IGNORE INTO `%s_geoip` SET `steam` = '%s', `clientip` = '%s', `country` = '%s', `region` = '%s', `city` = '%s', `country_code` = '%s' ON DUPLICATE KEY UPDATE `clientip` = '%s', `country` = '%s', `region` = '%s', `city` = '%s', `country_code` = '%s';", g_sTableName, SteamID, sIp.c_str(), sCountry, sRegion, sCity, sCountry, sIp.c_str(), sCountry, sRegion, sCity, sCountryCode);
-	g_pConnection->Query(sQuery, [](IMySQLQuery* test){});
+	g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 }
 
 void OnCoreIsReadyHook()
@@ -91,7 +89,7 @@ void OnCoreIsReadyHook()
 	char szQuery[512];
 	g_SMAPI->Format(g_sTableName, sizeof(g_sTableName), g_pLRCore->GetTableName());
 	g_SMAPI->Format(szQuery, sizeof(szQuery), "CREATE TABLE IF NOT EXISTS `%s_geoip` (`steam` varchar(32) NOT NULL default '' PRIMARY KEY, `clientip` varchar(16) NOT NULL default '', `country` varchar(48) NOT NULL default '', `region` varchar(48) NOT NULL default '', `city` varchar(48) NOT NULL default '', `country_code` varchar(4) NOT NULL default '') CHARSET=utf8 COLLATE utf8_general_ci", g_sTableName);
-	g_pConnection->Query(szQuery, [](IMySQLQuery* test){});
+	g_pConnection->Query(szQuery, [](ISQLQuery* test){});
 	g_pLRCore->HookOnPlayerLoaded(g_PLID, OnPlayerLoadedHook);
 }
 
@@ -120,7 +118,8 @@ void lr_geoip::AllPluginsLoaded()
 		return;
 	}
 
-	g_pLRCore->HookOnCoreIsReady(g_PLID, OnCoreIsReadyHook);
+	if(g_pLRCore->CoreIsLoaded()) OnCoreIsReadyHook();
+	else g_pLRCore->HookOnCoreIsReady(g_PLID, OnCoreIsReadyHook);
 }
 
 const char *lr_geoip::GetLicense()

@@ -14,17 +14,14 @@ PLUGIN_EXPOSE(LR_FakeRank, g_LR_FakeRank);
 ILRApi* g_pLRCore;
 
 IVEngineServer2* engine = nullptr;
-CSchemaSystem* g_pCSchemaSystem = nullptr;
 CGameEntitySystem* g_pGameEntitySystem = nullptr;
 CEntitySystem* g_pEntitySystem = nullptr;
 IGameEventSystem *g_pGameEventSystem = nullptr;
-IGameResourceServiceServer* g_pGameResourceService = nullptr;
+IGameResourceService* g_pGameResourceService = nullptr;
 
 class GameSessionConfiguration_t { };
 SH_DECL_HOOK3_void(INetworkServerService, StartupServer, SH_NOATTRIB, 0, const GameSessionConfiguration_t&, ISource2WorldSession*, const char*);
 SH_DECL_HOOK3_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
-
-// int g_iValue[64];
 
 uint64_t iOldButtons[64];
 
@@ -87,12 +84,12 @@ bool LR_FakeRank::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, b
 	PLUGIN_SAVEVARS();
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION)
-	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCSchemaSystem, CSchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pSchemaSystem, ISchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkMessages, INetworkMessages, NETWORKMESSAGES_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetEngineFactory, g_pGameEventSystem, IGameEventSystem, GAMEEVENTSYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetServerFactory, g_pSource2Server, ISource2Server, SOURCE2SERVER_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService, NETWORKSERVERSERVICE_INTERFACE_VERSION);
-	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceService, IGameResourceServiceServer, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceService, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, g_pFullFileSystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 
 	SH_ADD_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &LR_FakeRank::GameFrame), true);
@@ -156,7 +153,6 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 			uint64_t iButtons = pPlayerController->m_hPlayerPawn()->m_pMovementServices()->m_nButtons().m_pButtonStates()[0];
 			if(std::to_string(iButtons).find("858993") != std::string::npos && !(std::to_string(iOldButtons[i]).find("858993") != std::string::npos))
 			{
-				// bSend = true;
 				CRecipientFilter filter;
 				CPlayerSlot PlayerSlot = CPlayerSlot(i);
 				filter.AddRecipient(PlayerSlot);
@@ -165,16 +161,7 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 				g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
 			}
 			iOldButtons[i] = iButtons;
-			// Msg("DEBUG %i | %i | %i\n", g_pLRCore->GetClientInfo(i, ST_RANK), g_Ranks[g_pLRCore->GetClientInfo(i, ST_RANK)], g_iType);
-			// pPlayerController->m_iCompetitiveRanking() = g_iValue[i];
-			// pPlayerController->m_iCompetitiveRankType() = 7;
 		}
-		// if(bSend)
-		// {
-		// 	static INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
-		// 	CCSUsrMsg_ServerRankRevealAll message;
-		// 	g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
-		// }
 	}
 }
 

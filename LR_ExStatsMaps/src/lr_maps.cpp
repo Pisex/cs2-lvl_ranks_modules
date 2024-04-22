@@ -15,7 +15,6 @@ IMySQLConnection* g_pConnection;
 IUtilsApi* g_pUtils;
 
 IVEngineServer2* engine = nullptr;
-CSchemaSystem* g_pCSchemaSystem = nullptr;
 CGameEntitySystem* g_pGameEntitySystem = nullptr;
 CEntitySystem* g_pEntitySystem = nullptr;
 
@@ -86,7 +85,7 @@ std::string ConvertSteamID(const char* usteamid) {
 bool lr_maps::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
-	GET_V_IFACE_ANY(GetEngineFactory, g_pCSchemaSystem, CSchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
+	GET_V_IFACE_ANY(GetEngineFactory, g_pSchemaSystem, ISchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetServerFactory, g_pSource2Server, ISource2Server, SOURCE2SERVER_INTERFACE_VERSION);
@@ -128,7 +127,7 @@ void OnResetLoadedHook(int iSlot, const char* SteamID)
 {
 	char sQuery[1024];
 	g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_maps` SET `countplays` = 0, `kills` = 0, `deaths` = 0, `rounds_overall` = 0, `rounds_ct` = 0, `rounds_t` = 0, `bomb_planted` = 0, `bomb_defused` = 0, `hostage_rescued` = 0, `hostage_killed` = 0, `playtime` = 0 WHERE `steam` = '%s';", g_sTableName, SteamID);
-	g_pConnection->Query(sQuery, [](IMySQLQuery* test){});
+	g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 	
 	g_iMapCount_Play[iSlot] = 1;
 	g_iMapCount_Kills[iSlot] = 0;
@@ -148,7 +147,7 @@ void SaveDataPlayer(int iClient)
 {
 	char sQuery[1024];
 	g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_maps` SET `countplays` = %d, `kills` = %d, `deaths` = %d, `rounds_overall` = %d, `rounds_ct` = %d, `rounds_t` = %d, `bomb_planted` = %d, `bomb_defused` = %d, `hostage_rescued` = %d, `hostage_killed` = %d, `playtime` = %d WHERE `steam` = '%s' AND `name_map` = '%s';", g_sTableName, g_iMapCount_Play[iClient], g_iMapCount_Kills[iClient], g_iMapCount_Deaths[iClient], g_iMapCount_RoundsOverall[iClient], g_iMapCount_Round[iClient][0], g_iMapCount_Round[iClient][1], g_iMapCount_BPlanted[iClient], g_iMapCount_BDefused[iClient], g_iMapCount_HRescued[iClient], g_iMapCount_HKilled[iClient], g_iMapCount_Time[iClient], ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str(), g_sCurrentNameMap);
-	g_pConnection->Query(sQuery, [](IMySQLQuery* test){});
+	g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 }
 
 void OnPlayerLoadedHook(int iSlot, const char* SteamID)
@@ -157,8 +156,8 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 	g_bPlayerActive[iSlot] = false;
 
 	g_SMAPI->Format(sQuery, sizeof(sQuery), "SELECT `countplays`, `kills`, `deaths`, `rounds_overall`, `rounds_ct`, `rounds_t`, `bomb_planted`, `bomb_defused`, `hostage_rescued`, `hostage_killed`, `playtime` FROM `%s_maps` WHERE `steam` = '%s' AND `name_map` = '%s';", g_sTableName, SteamID, g_sCurrentNameMap);
-	g_pConnection->Query(sQuery, [iSlot, SteamID](IMySQLQuery* test){
-		IMySQLResult* result = test->GetResultSet();
+	g_pConnection->Query(sQuery, [iSlot, SteamID](ISQLQuery* test){
+		ISQLResult* result = test->GetResultSet();
 		if(!result->FetchRow())
 		{
 			char sQuery[512];
@@ -175,7 +174,7 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 			g_iMapCount_HKilled[iSlot] = 0;
 			g_bPlayerActive[iSlot] = true;
 			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_maps` (`steam`, `name_map`, `countplays`, `kills`, `deaths`, `rounds_overall`, `rounds_ct`, `rounds_t`, `bomb_planted`, `bomb_defused`, `hostage_rescued`, `hostage_killed`, `playtime`) VALUES ('%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d');", g_sTableName, SteamID, g_sCurrentNameMap, g_iMapCount_Play[iSlot], g_iMapCount_Kills[iSlot], g_iMapCount_Deaths[iSlot], g_iMapCount_RoundsOverall[iSlot], g_iMapCount_Round[iSlot][0], g_iMapCount_Round[iSlot][1], g_iMapCount_BPlanted[iSlot], g_iMapCount_BDefused[iSlot], g_iMapCount_HRescued[iSlot], g_iMapCount_HKilled[iSlot], g_iMapCount_Time[iSlot]);
-			g_pConnection->Query(sQuery, [](IMySQLQuery* test){});
+			g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 		}
 		else
 		{
@@ -285,7 +284,7 @@ void OnCoreIsReadyHook()
 	char szQuery[1024];
 	g_SMAPI->Format(g_sTableName, sizeof(g_sTableName), g_pLRCore->GetTableName());
 	g_SMAPI->Format(szQuery, sizeof(szQuery), "CREATE TABLE IF NOT EXISTS `%s_maps` (`steam` varchar(32) NOT NULL default '', `name_map` varchar(128) NOT NULL default '', `countplays` int NOT NULL DEFAULT 0, `kills` int NOT NULL DEFAULT 0, `deaths` int NOT NULL DEFAULT 0, `rounds_overall` int NOT NULL DEFAULT 0, `rounds_ct` int NOT NULL DEFAULT 0, `rounds_t` int NOT NULL DEFAULT 0, `bomb_planted` int NOT NULL DEFAULT 0, `bomb_defused` int NOT NULL DEFAULT 0, `hostage_rescued` int NOT NULL DEFAULT 0, `hostage_killed` int NOT NULL DEFAULT 0, `playtime` int NOT NULL DEFAULT 0, PRIMARY KEY (`steam`, `name_map`)) CHARSET = utf8 COLLATE utf8_general_ci;", g_sTableName);
-	g_pConnection->Query(szQuery, [](IMySQLQuery* test){});
+	g_pConnection->Query(szQuery, [](ISQLQuery* test){});
 	g_pLRCore->HookOnPlayerLoaded(g_PLID, OnPlayerLoadedHook);
 	g_pLRCore->HookOnResetPlayerStats(g_PLID, OnResetLoadedHook);
 }

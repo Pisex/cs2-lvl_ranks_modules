@@ -10,12 +10,8 @@
 #include <entity2/entitysystem.h>
 #include "inetchannelinfo.h"
 #include "sdk/utils.hpp"
-#include "sdk/schemasystem.h"
-#include "sdk/CBaseEntity.h"
-#include "sdk/CBasePlayerPawn.h"
-#include "sdk/CCSPlayerController.h"
-#include "sdk/CGameRules.h"
 #include "iserver.h"
+class CCSGameRules;
 #include "include/lvl_ranks.h"
 #include "include/menus.h"
 #include "include/mysql_mm.h"

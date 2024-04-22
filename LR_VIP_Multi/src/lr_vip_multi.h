@@ -9,10 +9,6 @@
 #include <sh_vector.h>
 #include <entity2/entitysystem.h>
 #include "sdk/utils.hpp"
-#include "sdk/schemasystem.h"
-#include "sdk/CBaseEntity.h"
-#include "sdk/CBasePlayerPawn.h"
-#include "sdk/CCSPlayerController.h"
 #include "iserver.h"
 #include "include/lvl_ranks.h"
 #include "include/vip.h"

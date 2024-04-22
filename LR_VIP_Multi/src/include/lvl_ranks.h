@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <string>
+class IMySQLConnection;
 
 #define LR_INTERFACE "ILRApi"
 
@@ -49,7 +50,8 @@ enum LR_SettingType
     LR_DB_SaveDataPlayer_Mode,
     LR_DB_Allow_UTF8MB4,
     LR_DB_Charset_Type,
-    LR_TopCount
+    LR_TopCount,
+	LR_StartPoints
 };
 
 enum LR_SettingStatsType
@@ -131,4 +133,6 @@ public:
     virtual void RoundWithoutValue() = 0;
     virtual bool ChangeClientValue(int iSlot, int iGiveExp) = 0;
     virtual void ResetPlayerStats(int iSlot) = 0;
+
+	virtual IMySQLConnection* GetDatabases() = 0;
 };

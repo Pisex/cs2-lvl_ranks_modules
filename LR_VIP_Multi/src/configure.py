@@ -6,7 +6,7 @@ except:
   try:
     import ambuild
     sys.stderr.write('It looks like you have AMBuild 1 installed, but this project uses AMBuild 2.\n')
-    sys.stderr.write('Upgrade to the lalr_vip_multi version of AMBuild to continue.\n')
+    sys.stderr.write('Upgrade to the latest version of AMBuild to continue.\n')
   except:
     sys.stderr.write('AMBuild must be installed to build this project.\n')
     sys.stderr.write('http://www.alliedmods.net/ambuild\n')
@@ -25,6 +25,8 @@ parser.options.add_argument('-a', '--plugin-alias', type=str, dest='plugin_alias
                        help='Plugin alias')
 parser.options.add_argument('--hl2sdk-root', type=str, dest='hl2sdk_root', default=None,
                        help='Root search folder for HL2SDKs')
+parser.options.add_argument('--hl2sdk-manifests', type=str, dest='hl2sdk_manifests', default=None,
+                       help='HL2SDK manifests source tree folder')
 parser.options.add_argument('--mms_path', type=str, dest='mms_path', default=None,
                        help='Metamod:Source source tree folder')
 parser.options.add_argument('--enable-debug', action='store_const', const='1', dest='debug',

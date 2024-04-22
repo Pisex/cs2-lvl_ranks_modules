@@ -9,7 +9,6 @@ ILRApi* g_pLRCore;
 IMySQLConnection* g_pConnection;
 
 IVEngineServer2* engine = nullptr;
-CSchemaSystem* g_pCSchemaSystem = nullptr;
 CGameEntitySystem* g_pGameEntitySystem = nullptr;
 CEntitySystem* g_pEntitySystem = nullptr;
 
@@ -55,7 +54,6 @@ bool containsOnlyDigits(const std::string& str) {
 bool lr_ge::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
-	GET_V_IFACE_ANY(GetEngineFactory, g_pCSchemaSystem, CSchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
@@ -99,7 +97,7 @@ void OnGiveExp(const CCommandContext& context, const CCommand& args)
 		}
 		char szQuery[1024];
 		g_SMAPI->Format(szQuery, sizeof(szQuery), "UPDATE `%s` SET `value` = `value` + '%i' WHERE `steam` = '%s';", g_sTableName, iCount, args[1]);
-		g_pConnection->Query(szQuery, [](IMySQLQuery* test){});
+		g_pConnection->Query(szQuery, [](ISQLQuery* test){});
 	}
 	else META_CONPRINTF("[Admin] Usage: lr_giveexp \"STEAM_1:0:84111\" \"1000\"\n");
 }

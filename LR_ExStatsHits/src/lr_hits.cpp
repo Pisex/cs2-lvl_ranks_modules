@@ -11,7 +11,6 @@ IMySQLConnection* g_pConnection;
 IUtilsApi* g_pUtils;
 
 IVEngineServer2* engine = nullptr;
-CSchemaSystem* g_pCSchemaSystem = nullptr;
 CGameEntitySystem* g_pGameEntitySystem = nullptr;
 CEntitySystem* g_pEntitySystem = nullptr;
 
@@ -73,7 +72,6 @@ std::string ConvertSteamID(const char* usteamid) {
 bool lr_hits::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
-	GET_V_IFACE_ANY(GetEngineFactory, g_pCSchemaSystem, CSchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
 	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, g_pSource2GameClients, this, &lr_hits::OnClientDisconnect, true);
@@ -104,7 +102,7 @@ void OnResetLoadedHook(int iSlot, const char* SteamID)
 	`Neak` = 0 \
 WHERE \
 	`SteamID` = '%s'", g_sTableName, SteamID);
-	g_pConnection->Query(sQuery, [](IMySQLQuery* test){});
+	g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 }
 
 void OnPlayerLoadedHook(int iSlot, const char* SteamID)
@@ -133,14 +131,14 @@ FROM \
 	`%s_hits` \
 WHERE \
 	`SteamID` = '%s';", g_sTableName, SteamID);
-	g_pConnection->Query(sQuery, [iSlot, SteamID](IMySQLQuery* test){
-		IMySQLResult* result = test->GetResultSet();
+	g_pConnection->Query(sQuery, [iSlot, SteamID](ISQLQuery* test){
+		ISQLResult* result = test->GetResultSet();
 		bool bLoadData = true;
 		if(!result->FetchRow())
 		{
 			char sQuery[128];
 			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_hits` (`SteamID`) VALUES ('%s');", g_sTableName, SteamID);
-			g_pConnection->Query(sQuery, [](IMySQLQuery* test){});
+			g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 			bLoadData = false;
 		}
 
@@ -182,7 +180,7 @@ void SaveData(int iClient)
 		%s \
 	WHERE \
 		`SteamID` = '%s'", g_sTableName, g_iHits[iClient][HD_DmgHealth], g_iHits[iClient][HD_DmgArmor], sColumns, ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str());
-		g_pConnection->Query(sQuery, [](IMySQLQuery* test){});
+		g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 
 		g_iHitFlags[iClient] = 0;
 	}
@@ -234,7 +232,7 @@ void OnCoreIsReadyHook()
 	`RightLeg` int NOT NULL DEFAULT 0, \
 	`Neak` int NOT NULL DEFAULT 0\
 ) CHARSET = utf8 COLLATE utf8_general_ci;", g_sTableName);
-	g_pConnection->Query(szQuery, [](IMySQLQuery* test){});
+	g_pConnection->Query(szQuery, [](ISQLQuery* test){});
 	g_pLRCore->HookOnPlayerLoaded(g_PLID, OnPlayerLoadedHook);
 	g_pLRCore->HookOnResetPlayerStats(g_PLID, OnResetLoadedHook);
 }
