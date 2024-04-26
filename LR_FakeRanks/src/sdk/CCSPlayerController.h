@@ -14,4 +14,5 @@ public:
 	SCHEMA_FIELD(CHandle<CCSPlayerPawn>, CCSPlayerController, m_hPlayerPawn);
 	SCHEMA_FIELD(int32_t, CCSPlayerController, m_iCompetitiveRanking);
 	SCHEMA_FIELD(int8_t, CCSPlayerController, m_iCompetitiveRankType);
+	SCHEMA_FIELD(int32_t, CCSPlayerController, m_iCompetitiveWins);
 };

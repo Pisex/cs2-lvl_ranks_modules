@@ -135,6 +135,7 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 			if(!pPlayerController || !pPlayerController->m_hPawn() || !pPlayerController->m_hPlayerPawn()) continue;
 			if(pPlayerController->m_steamID() <= 0)
 				continue;
+			pPlayerController->m_iCompetitiveWins() = 111;
 			switch (g_iType)
 			{
 			case 11:
