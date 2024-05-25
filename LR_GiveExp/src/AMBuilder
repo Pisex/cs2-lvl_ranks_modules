@@ -25,14 +25,9 @@ for sdk_target in MMSPlugin.sdk_targets:
     binary.compiler.cxxincludes += [
       os.path.join(builder.sourcePath, 'include'),
     ]
-    if binary.compiler.target.platform == 'linux':
-      binary.compiler.postlink += [
-      '/usr/lib/x86_64-linux-gnu/libmaxminddb.a'
-    ]
 
     binary.sources += [
       'lr_ge.cpp',
-      os.path.join('sdk', 'schemasystem.cpp')
     ]
     if cxx.target.arch == 'x86':
       binary.sources += ['sourcehook/sourcehook_hookmangen.cpp']

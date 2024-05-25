@@ -47,8 +47,14 @@ std::string ConvertSteamID(const char* usteamid) {
     return result;
 }
 
-bool containsOnlyDigits(const std::string& str) {
-	return str.find_first_not_of("0123456789") == std::string::npos;
+bool containsOnlyDigits(const std::string &str)
+{
+    if (str.empty()) return false;
+
+    auto start = str.begin();
+    if (*start == '-') ++start;
+
+    return std::all_of(start, str.end(), [](char c) { return std::isdigit(c); });
 }
 
 bool lr_ge::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
