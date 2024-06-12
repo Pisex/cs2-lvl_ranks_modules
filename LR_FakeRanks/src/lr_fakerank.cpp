@@ -1,10 +1,9 @@
 #include "lr_fakerank.h"
-#include <entitysystem.h>
 #include <convar.h>
 #include <networksystem/inetworkserializer.h>
 #include <networksystem/inetworkmessages.h>
 #include <inetchannel.h>
-#include "schemasystem.h"
+#include "schemasystem/schemasystem.h"
 #include "protobuf/generated/cstrike15_usermessages.pb.h"
 
 LR_FakeRank g_LR_FakeRank;
@@ -127,11 +126,10 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 {
 	if(bLoaded)
 	{
-		// CRecipientFilter filter;
-		// bool bSend = false;
+		CRecipientFilter filter;
 		for (int i = 0; i < 64; i++)
 		{
-			CCSPlayerController* pPlayerController =  (CCSPlayerController *)g_pEntitySystem->GetBaseEntity((CEntityIndex)(i + 1));
+			CCSPlayerController* pPlayerController =  CCSPlayerController::FromSlot(i);
 			if(!pPlayerController || !pPlayerController->m_hPawn() || !pPlayerController->m_hPlayerPawn()) continue;
 			if(pPlayerController->m_steamID() <= 0)
 				continue;
@@ -154,14 +152,15 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 			uint64_t iButtons = pPlayerController->m_hPlayerPawn()->m_pMovementServices()->m_nButtons().m_pButtonStates()[0];
 			if(std::to_string(iButtons).find("858993") != std::string::npos && !(std::to_string(iOldButtons[i]).find("858993") != std::string::npos))
 			{
-				CRecipientFilter filter;
-				CPlayerSlot PlayerSlot = CPlayerSlot(i);
-				filter.AddRecipient(PlayerSlot);
-				static INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
-				CCSUsrMsg_ServerRankRevealAll message;
-				g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
+				filter.AddRecipient(CPlayerSlot(i));
 			}
 			iOldButtons[i] = iButtons;
+		}
+		if(filter.GetRecipientCount() > 0)
+		{
+			static INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
+			CCSUsrMsg_ServerRankRevealAll message;
+			g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
 		}
 	}
 }

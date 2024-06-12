@@ -9,7 +9,7 @@ import os
 for sdk_target in MMSPlugin.sdk_targets:
   sdk = sdk_target.sdk
   cxx = sdk_target.cxx
-
+  cxx.cxxflags += ['-Wno-invalid-offsetof']
   binary = MMSPlugin.HL2Library(builder, cxx, MMSPlugin.plugin_name, sdk)
 
   binary.sources += [
@@ -28,11 +28,11 @@ for sdk_target in MMSPlugin.sdk_targets:
   ])]
 
   binary.sources += [
-    os.path.join('sdk', 'schemasystem.cpp'),
+    os.path.join('..', 'SchemaEntity', 'schemasystem.cpp'),
   ]
 
   binary.compiler.cxxincludes += [
-    os.path.join(builder.sourcePath, 'sdk'),
+    os.path.join(builder.sourcePath, '..', 'SchemaEntity'),
   ]
 
   nodes = builder.Add(binary)

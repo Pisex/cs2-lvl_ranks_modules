@@ -4,24 +4,20 @@
 class CGameEntitySystem;
 
 #include <ISmmPlugin.h>
-#include <igameevents.h>
-#include <igameeventsystem.h>
-#include <irecipientfilter.h>
 #include <sh_vector.h>
 #include "utlvector.h"
 #include "ehandle.h"
 #include <iserver.h>
 #include <entity2/entitysystem.h>
+#include "igameevents.h"
 #include "entitysystem.h"
-#include "sdk/schemasystem.h"
-#include "sdk/CBaseEntity.h"
-#include "sdk/CGameRulesProxy.h"
-#include "sdk/CBasePlayerPawn.h"
-#include "sdk/CCSPlayerController.h"
-#include "sdk/CCSPlayer_ItemServices.h"
-#include "sdk/CSmokeGrenadeProjectile.h"
-#include "sdk/module.h"
+#include "igameeventsystem.h"
+#include "vector.h"
+#include "CCSPlayerController.h"
+#include "CGameRules.h"
+#include "module.h"
 #include "include/lvl_ranks.h"
+#include "irecipientfilter.h"
 
 class CRecipientFilter : public IRecipientFilter
 {
@@ -71,7 +67,7 @@ public:
 private:
 	NetChannelBufType_t m_nBufType;
 	bool m_bInitMessage;
-	CUtlVectorFixed<CPlayerSlot, 64> m_Recipients;
+	CUtlVectorFixed<CPlayerSlot, 65> m_Recipients;
 };
 
 class LR_FakeRank final : public ISmmPlugin, public IMetamodListener
