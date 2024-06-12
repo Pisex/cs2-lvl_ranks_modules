@@ -158,9 +158,10 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 		}
 		if(filter.GetRecipientCount() > 0)
 		{
-			static INetworkSerializable* message_type = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
-			CCSUsrMsg_ServerRankRevealAll message;
-			g_pGameEventSystem->PostEventAbstract(0, false, &filter, message_type, &message, 0);
+			INetworkMessageInternal *netmsg = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
+			CNetMessage *msg = netmsg->AllocateMessage();
+            g_pGameEventSystem->PostEventAbstract(0, false, &filter, netmsg, msg, 0);
+			netmsg->DeallocateMessage(msg);
 		}
 	}
 }
