@@ -84,6 +84,7 @@ int     g_iAccountID[64],
         m_vecVelocity;
 
 float   g_flDistance;
+float 	g_flSpeed;
 
 char    g_sTableName[32];
 
@@ -177,6 +178,12 @@ void LoadSettings()
 				g_flDistance = pKey->GetFloat("min_distance", 0.0);
 				break;
 			}
+
+			case 3:
+			{
+				g_flSpeed = pKey->GetFloat("min_speed", 100.0);
+				break;
+			}
 		}
 		g_iExp[iUKType] = g_iExpMode > 0 ? pKey->GetInt("exp") : 0;
 	}
@@ -255,7 +262,7 @@ void OnPlayerKilledPreHook(IGameEvent* pEvent, int &iExpCaused, int iExpVictim, 
 			int iAttacker = pEvent->GetInt("attacker");
 			int iUKFlags = UnusualKill_None;
 			CCSPlayerController* pAttacker = (CCSPlayerController*)pEvent->GetPlayerController("attacker");
-			if(pAttacker && pAttacker->GetPlayerPawn())
+			if(pAttacker && pAttacker->GetPlayerPawn() && pAttacker->m_steamID() > 0)
 			{
 				CCSPlayer_WeaponServices* pWeaponServices = pAttacker->GetPlayerPawn()->m_pWeaponServices();
 				if(pWeaponServices)
@@ -283,7 +290,7 @@ void OnPlayerKilledPreHook(IGameEvent* pEvent, int &iExpCaused, int iExpVictim, 
 						iUKFlags |= UnusualKill_Jump;
 					}
 
-					if(vecVelocity.Length() > 0)
+					if(vecVelocity.Length() >= g_flSpeed)
 					{
 						iUKFlags |= UnusualKill_Run;
 					}

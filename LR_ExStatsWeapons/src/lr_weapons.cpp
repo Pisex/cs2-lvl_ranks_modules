@@ -206,7 +206,7 @@ void OnPlayerKilledPreHook(IGameEvent* pEvent, int &iExpCaused, int iExpVictim, 
 	{
 		int iAttacker = pEvent->GetInt("attacker");
 		CCSPlayerController* pAttacker = (CCSPlayerController*)pEvent->GetPlayerController("attacker");
-		if(pAttacker && pAttacker->GetPlayerPawn())
+		if(pAttacker && pAttacker->GetPlayerPawn() && pAttacker->m_steamID() > 0)
 		{
 			const char* sBuffer;
 			char sClassname[64];
@@ -220,7 +220,7 @@ void OnPlayerKilledPreHook(IGameEvent* pEvent, int &iExpCaused, int iExpVictim, 
 
 			for(int i; i != g_iCountWeapons; i++)
 			{
-				if(!strcmp(sClassname, g_sWeaponsClassName[i]))
+				if(!strcmp(sClassname, g_sWeaponsClassName[i]) && g_hWeapons.find(sClassname) != g_hWeapons.end())
 				{
 					if(g_bWeaponsCoeffActive)
 					{
