@@ -31,56 +31,97 @@ bool lr_geoip::Unload(char *error, size_t maxlen)
 	return true;
 }
 
-void OnPlayerLoadedHook(int iSlot, const char* SteamID)
-{
-	char sQuery[1024], sCity[45], sRegion[45], sCountry[45], sCountryCode[3];
-	auto playerNetInfo = engine->GetPlayerNetInfo(iSlot);
-	if(playerNetInfo == nullptr) {
-		return;
-	}
-	auto sIp2 = std::string(playerNetInfo->GetAddress());
-	auto sIp = sIp2.substr(0, sIp2.find(":"));
-
-	MMDB_s mmdb;
-	char szPath[256];
-	int iSize = g_SMAPI->PathFormat(szPath, sizeof(szPath), "%s/addons/configs/geoip/GeoLite2-City.mmdb", g_SMAPI->GetBaseDir());
-    int status = MMDB_open(szPath, MMDB_MODE_MMAP, &mmdb);
-
-    if (status != MMDB_SUCCESS) {
-        Msg("Error opening the database.\n");
-		return;
+#define SAFE_MMDB_STR(result, entry_data, buffer, ...)                                                  \
+    if (MMDB_get_value(&(result).entry, &(entry_data), __VA_ARGS__, NULL) == MMDB_SUCCESS &&            \
+        (entry_data).has_data && (entry_data).type == MMDB_DATA_TYPE_UTF8_STRING) {                     \
+        g_SMAPI->Format(buffer, (entry_data).data_size + 1, "%.*s",                                     \
+                        (entry_data).data_size, (entry_data).utf8_string);                              \
+    } else {                                                                                            \
+        buffer[0] = '\0'; /* очищаем строку, если нет данных */                                         \
     }
 
-    int gai_error, mmdb_error;
+void OnPlayerLoadedHook(int iSlot, const char* SteamID)
+{
+    char sQuery[1024], sCity[45] = "", sRegion[45] = "", sCountry[45] = "", sCountryCode[3] = "";
+    auto playerNetInfo = engine->GetPlayerNetInfo(iSlot);
+    if (playerNetInfo == nullptr) {
+        Msg("PlayerNetInfo is null for slot %d.\n", iSlot);
+        return;
+    }
+
+    auto sIp2 = std::string(playerNetInfo->GetAddress());
+    if (sIp2.empty()) {
+        Msg("Failed to retrieve IP address for slot %d.\n", iSlot);
+        return;
+    }
+
+    auto sIp = sIp2.substr(0, sIp2.find(":"));
+    if (sIp.empty()) {
+        Msg("Extracted IP address is empty for slot %d.\n", iSlot);
+        return;
+    }
+
+    MMDB_s mmdb;
+    char szPath[256];
+
+    int iSize = g_SMAPI->PathFormat(szPath, sizeof(szPath), "%s/addons/configs/geoip/GeoLite2-City.mmdb", g_SMAPI->GetBaseDir());
+    if (iSize <= 0) {
+        Msg("Failed to format GeoIP database path.\n");
+        return;
+    }
+
+    int status = MMDB_open(szPath, MMDB_MODE_MMAP, &mmdb);
+    if (status != MMDB_SUCCESS) {
+        Msg("Error opening the GeoIP database: %s\n", MMDB_strerror(status));
+        return;
+    }
+
+    int gai_error = 0, mmdb_error = 0;
     MMDB_lookup_result_s result = MMDB_lookup_string(&mmdb, sIp.c_str(), &gai_error, &mmdb_error);
 
-    if (gai_error || mmdb_error || !result.found_entry) {
-        Msg("Error while looking up IP address.\n");
+    if (gai_error != 0) {
+        Msg("GeoIP lookup failed with GAI error: %s\n", gai_strerror(gai_error));
+        MMDB_close(&mmdb);
+        return;
+    }
+
+    if (mmdb_error != MMDB_SUCCESS) {
+        Msg("GeoIP lookup failed with MMDB error: %s\n", MMDB_strerror(mmdb_error));
+        MMDB_close(&mmdb);
+        return;
+    }
+
+    if (!result.found_entry) {
+        Msg("No GeoIP entry found for IP: %s\n", sIp.c_str());
         MMDB_close(&mmdb);
         return;
     }
 
     MMDB_entry_data_s entry_data;
-    status = MMDB_get_value(&result.entry, &entry_data, "country", "names", g_pUtils->GetLanguage(), NULL);
-    if(status == MMDB_SUCCESS && entry_data.type == MMDB_DATA_TYPE_UTF8_STRING)
-		g_SMAPI->Format(sCountry, entry_data.data_size+1, entry_data.utf8_string);
-
-    status = MMDB_get_value(&result.entry, &entry_data, "country", "iso_code", NULL);
-    if(status == MMDB_SUCCESS && entry_data.type == MMDB_DATA_TYPE_UTF8_STRING)
-		g_SMAPI->Format(sCountryCode, entry_data.data_size+1, entry_data.utf8_string);
-
-    status = MMDB_get_value(&result.entry, &entry_data, "city", "names", g_pUtils->GetLanguage(), NULL);
-    if(status == MMDB_SUCCESS && entry_data.type == MMDB_DATA_TYPE_UTF8_STRING)
-		g_SMAPI->Format(sCity, entry_data.data_size+1, entry_data.utf8_string);
-
-    status = MMDB_get_value(&result.entry, &entry_data, "subdivisions", "0", "names", g_pUtils->GetLanguage(), NULL);
-    if(status == MMDB_SUCCESS && entry_data.type == MMDB_DATA_TYPE_UTF8_STRING)
-		g_SMAPI->Format(sRegion, entry_data.data_size+1, entry_data.utf8_string);
+    
+    SAFE_MMDB_STR(result, entry_data, sCountry,     "country", "names", "en")
+    SAFE_MMDB_STR(result, entry_data, sCountryCode, "country", "iso_code")
+    SAFE_MMDB_STR(result, entry_data, sCity,        "city", "names", "en")
+    SAFE_MMDB_STR(result, entry_data, sRegion,      "subdivisions", "0", "names", "en")
 
     MMDB_close(&mmdb);
 
-	g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT IGNORE INTO `%s_geoip` SET `steam` = '%s', `clientip` = '%s', `country` = '%s', `region` = '%s', `city` = '%s', `country_code` = '%s' ON DUPLICATE KEY UPDATE `clientip` = '%s', `country` = '%s', `region` = '%s', `city` = '%s', `country_code` = '%s';", g_sTableName, SteamID, sIp.c_str(), sCountry, sRegion, sCity, sCountry, sIp.c_str(), sCountry, sRegion, sCity, sCountryCode);
-	g_pConnection->Query(sQuery, [](ISQLQuery* test){});
+    g_SMAPI->Format(sQuery, sizeof(sQuery),
+        "INSERT IGNORE INTO `%s_geoip` SET `steam` = '%s', `clientip` = '%s', `country` = '%s', `region` = '%s', `city` = '%s', `country_code` = '%s' "
+        "ON DUPLICATE KEY UPDATE `clientip` = '%s', `country` = '%s', `region` = '%s', `city` = '%s', `country_code` = '%s';",
+        g_sTableName, SteamID, sIp.c_str(), sCountry, sRegion, sCity, sCountryCode,
+        sIp.c_str(), sCountry, sRegion, sCity, sCountryCode);
+
+    if (!g_pConnection) {
+        Msg("Database connection is null. Query not executed.\n");
+        return;
+    }
+
+    g_pConnection->Query(sQuery, [](ISQLQuery* test) {
+        if (!test) {
+            Msg("Failed to execute GeoIP query.\n");
+        }
+    });
 }
 
 void OnCoreIsReadyHook()
@@ -129,7 +170,7 @@ const char *lr_geoip::GetLicense()
 
 const char *lr_geoip::GetVersion()
 {
-	return "1.0";
+	return "1.0.1";
 }
 
 const char *lr_geoip::GetDate()
