@@ -11,22 +11,34 @@ PLUGIN_EXPOSE(LR_FakeRank, g_LR_FakeRank);
 
 
 ILRApi* g_pLRCore;
+IUtilsApi* g_pUtils;
 
 IVEngineServer2* engine = nullptr;
 CGameEntitySystem* g_pGameEntitySystem = nullptr;
 CEntitySystem* g_pEntitySystem = nullptr;
 IGameEventSystem *g_pGameEventSystem = nullptr;
 IGameResourceService* g_pGameResourceService = nullptr;
+CGlobalVars *gpGlobals = nullptr;
 
-class GameSessionConfiguration_t { };
-SH_DECL_HOOK3_void(INetworkServerService, StartupServer, SH_NOATTRIB, 0, const GameSessionConfiguration_t&, ISource2WorldSession*, const char*);
-SH_DECL_HOOK3_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
 
 uint64_t iOldButtons[64];
 
 int g_iType;
 bool bLoaded = false;
 std::map<int, int> g_Ranks;
+
+
+CGameEntitySystem* GameEntitySystem()
+{
+	return g_pUtils->GetCGameEntitySystem();
+}
+
+void StartupServer()
+{
+	g_pGameEntitySystem = GameEntitySystem();
+	g_pEntitySystem = g_pUtils->GetCEntitySystem();
+	gpGlobals = g_pUtils->GetCGlobalVars();
+}
 
 void LoadConfig()
 {
@@ -91,9 +103,6 @@ bool LR_FakeRank::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, b
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceService, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, g_pFullFileSystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 
-	SH_ADD_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &LR_FakeRank::GameFrame), true);
-	SH_ADD_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &LR_FakeRank::StartupServer), true);
-
 	ConVar_Register(FCVAR_RELEASE | FCVAR_SERVER_CAN_EXECUTE | FCVAR_GAMEDLL);
 
 	LoadConfig();
@@ -102,68 +111,15 @@ bool LR_FakeRank::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, b
 
 CON_COMMAND_EXTERN(mm_reload_fakerank, ReloadCommand, "Reload Fakerank config");
 
+
 void ReloadCommand(const CCommandContext& context, const CCommand& args)
 {
 	LoadConfig();
 }
 
-// CON_COMMAND_EXTERN(mm_value, ValueCommand, "Change map");
-
-// void ValueCommand(const CCommandContext& context, const CCommand& args)
-// {
-// 	auto slot = context.GetPlayerSlot();
-// 	g_iValue[slot.Get()] = std::stol(args[1]);
-// }
-
 bool LR_FakeRank::Unload(char *error, size_t maxlen)
 {
-	SH_REMOVE_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &LR_FakeRank::GameFrame), true);
-	SH_REMOVE_HOOK(INetworkServerService, StartupServer, g_pNetworkServerService, SH_MEMBER(this, &LR_FakeRank::StartupServer), true);
 	return true;
-}
-
-void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
-{
-	if(bLoaded)
-	{
-		CRecipientFilter filter;
-		for (int i = 0; i < 64; i++)
-		{
-			CCSPlayerController* pPlayerController =  CCSPlayerController::FromSlot(i);
-			if(!pPlayerController || !pPlayerController->m_hPawn() || !pPlayerController->m_hPlayerPawn()) continue;
-			if(pPlayerController->m_steamID() <= 0)
-				continue;
-			pPlayerController->m_iCompetitiveWins() = 111;
-			switch (g_iType)
-			{
-			case 11:
-				pPlayerController->m_iCompetitiveRanking() = g_pLRCore->GetClientInfo(i, ST_EXP);
-				pPlayerController->m_iCompetitiveRankType() = g_iType;
-				break;
-			case 13:
-				pPlayerController->m_iCompetitiveRanking() = g_Ranks[g_pLRCore->GetClientInfo(i, ST_RANK)];
-				pPlayerController->m_iCompetitiveRankType() = 11;
-				break;
-			default:
-				pPlayerController->m_iCompetitiveRanking() = g_Ranks[g_pLRCore->GetClientInfo(i, ST_RANK)];
-				pPlayerController->m_iCompetitiveRankType() = g_iType;
-				break;
-			}
-			uint64_t iButtons = pPlayerController->m_hPlayerPawn()->m_pMovementServices()->m_nButtons().m_pButtonStates()[0];
-			if(std::to_string(iButtons).find("858993") != std::string::npos && !(std::to_string(iOldButtons[i]).find("858993") != std::string::npos))
-			{
-				filter.AddRecipient(CPlayerSlot(i));
-			}
-			iOldButtons[i] = iButtons;
-		}
-		if(filter.GetRecipientCount() > 0)
-		{
-			INetworkMessageInternal *netmsg = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
-			CNetMessage *msg = netmsg->AllocateMessage();
-            g_pGameEventSystem->PostEventAbstract(0, false, &filter, netmsg, msg, 0);
-			netmsg->DeallocateMessage(msg);
-		}
-	}
 }
 
 void CoreIsReady()
@@ -174,6 +130,18 @@ void CoreIsReady()
 void LR_FakeRank::AllPluginsLoaded()
 {
 	int ret;
+	char error[64];
+
+	g_pUtils = (IUtilsApi *)g_SMAPI->MetaFactory(Utils_INTERFACE, &ret, NULL);
+	if (ret == META_IFACE_FAILED)
+	{
+		g_SMAPI->Format(error, sizeof(error), "Missing Utils system plugin");
+		ConColorMsg(Color(255, 0, 0, 255), "[%s] %s\n", GetLogTag(), error);
+		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
+		engine->ServerCommand(sBuffer.c_str());
+		return;
+	}
+
 	g_pLRCore = (ILRApi*)g_SMAPI->MetaFactory(LR_INTERFACE, &ret, NULL);
 	if (ret == META_IFACE_FAILED)
 	{
@@ -184,18 +152,59 @@ void LR_FakeRank::AllPluginsLoaded()
 		engine->ServerCommand(sBuffer.c_str());
 		return;
 	}
+	
+	g_pUtils->StartupServer(g_PLID, StartupServer);
 	g_pLRCore->HookOnCoreIsReady(g_PLID, CoreIsReady);
-}
+	g_pUtils->CreateTimer(0.0f, []() {
+		if(bLoaded)
+		{
+			int iCount = 0;
+			CPlayerBitVec filter;
+			for (int i = 0; i < 64; i++)
+			{
+				CCSPlayerController* pPlayerController = CCSPlayerController::FromSlot(i);
+				if (!pPlayerController) continue;
+				
+				CBasePlayerPawn* pPawn = pPlayerController->m_hPawn().Get();
+				if (!pPawn) continue;
+				
+				pPlayerController->m_iCompetitiveWins() = 777;
 
-CGameEntitySystem* GameEntitySystem()
-{
-	g_pGameEntitySystem = *reinterpret_cast<CGameEntitySystem**>(reinterpret_cast<uintptr_t>(g_pGameResourceService) + 0x50);
-	return g_pGameEntitySystem;
-}
+				switch (g_iType)
+				{
+				case 11:
+					pPlayerController->m_iCompetitiveRanking() = g_pLRCore->GetClientInfo(i, ST_EXP);
+					pPlayerController->m_iCompetitiveRankType() = g_iType;
+					break;
+				case 13:
+					pPlayerController->m_iCompetitiveRanking() = g_Ranks[g_pLRCore->GetClientInfo(i, ST_RANK)];
+					pPlayerController->m_iCompetitiveRankType() = 11;
+					break;
+				default:
+					pPlayerController->m_iCompetitiveRanking() = g_Ranks[g_pLRCore->GetClientInfo(i, ST_RANK)];
+					pPlayerController->m_iCompetitiveRankType() = g_iType;
+					break;
+				}
 
-void LR_FakeRank::StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession*, const char*)
-{
-	g_pEntitySystem = GameEntitySystem();
+				uint64_t iButtons = pPawn->m_pMovementServices()->m_nButtons().m_pButtonStates()[0];
+				if (iButtons & (1ULL << 33) && !(iOldButtons[i] & (1ULL << 33)))
+				{
+					filter.Set(CPlayerSlot(i));
+					iCount++;
+				}
+				iOldButtons[i] = iButtons;
+			}
+
+			if(iCount > 0)
+			{
+				INetworkMessageInternal *netmsg = g_pNetworkMessages->FindNetworkMessagePartial("CCSUsrMsg_ServerRankRevealAll");
+				CNetMessage *msg = netmsg->AllocateMessage();
+				g_pGameEventSystem->PostEventAbstract(-1, false, ABSOLUTE_PLAYER_LIMIT, reinterpret_cast<const uint64*>(filter.Base()), netmsg, msg, 0, NetChannelBufType_t::BUF_RELIABLE);
+				delete msg;
+			}
+		}
+		return 0.0f;
+	});
 }
 
 ///////////////////////////////////////
