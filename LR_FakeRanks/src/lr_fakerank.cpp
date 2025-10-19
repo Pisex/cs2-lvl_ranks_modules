@@ -186,7 +186,11 @@ void LR_FakeRank::AllPluginsLoaded()
 					break;
 				}
 
-				uint64_t iButtons = pPawn->m_pMovementServices()->m_nButtons().m_pButtonStates()[0];
+				// FIX: Null pointer check for movement services to prevent crash
+				auto pMovementServices = pPawn->m_pMovementServices();
+				if (!pMovementServices) continue;
+
+				uint64_t iButtons = pMovementServices->m_nButtons().m_pButtonStates()[0];
 				if (iButtons & (1ULL << 33) && !(iOldButtons[i] & (1ULL << 33)))
 				{
 					filter.Set(CPlayerSlot(i));
