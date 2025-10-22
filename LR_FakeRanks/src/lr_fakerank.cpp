@@ -9,17 +9,15 @@
 LR_FakeRank g_LR_FakeRank;
 PLUGIN_EXPOSE(LR_FakeRank, g_LR_FakeRank);
 
+ILRApi *g_pLRCore;
+IUtilsApi *g_pUtils;
 
-ILRApi* g_pLRCore;
-IUtilsApi* g_pUtils;
-
-IVEngineServer2* engine = nullptr;
-CGameEntitySystem* g_pGameEntitySystem = nullptr;
-CEntitySystem* g_pEntitySystem = nullptr;
+IVEngineServer2 *engine = nullptr;
+CGameEntitySystem *g_pGameEntitySystem = nullptr;
+CEntitySystem *g_pEntitySystem = nullptr;
 IGameEventSystem *g_pGameEventSystem = nullptr;
-IGameResourceService* g_pGameResourceService = nullptr;
+IGameResourceService *g_pGameResourceService = nullptr;
 CGlobalVars *gpGlobals = nullptr;
-
 
 uint64_t iOldButtons[64];
 
@@ -27,8 +25,7 @@ int g_iType;
 bool bLoaded = false;
 std::map<int, int> g_Ranks;
 
-
-CGameEntitySystem* GameEntitySystem()
+CGameEntitySystem *GameEntitySystem()
 {
 	return g_pUtils->GetCGameEntitySystem();
 }
@@ -44,7 +41,7 @@ void LoadConfig()
 {
 	g_Ranks.clear();
 	{
-		KeyValues* hKv = new KeyValues("LR_FakeRank");
+		KeyValues *hKv = new KeyValues("LR_FakeRank");
 		const char *pszPath = "addons/configs/levels_ranks/fakerank.ini";
 
 		if (!hKv->LoadFromFile(g_pFullFileSystem, pszPath))
@@ -53,33 +50,33 @@ void LoadConfig()
 			return;
 		}
 
-		switch(hKv->GetInt("Type", 0))
+		switch (hKv->GetInt("Type", 0))
 		{
-			case 0:
-			{
-				g_iType = 12;
-				break;
-			}
-			case 1:
-			{
-				g_iType = 7;
-				break;
-			}
-			case 2:
-			{
-				g_iType = 10;
-				break;
-			}
-			case 3:
-			{
-				g_iType = 11;
-				break;
-			}
-			case 4:
-			{
-				g_iType = 13;
-				break;
-			}
+		case 0:
+		{
+			g_iType = 12;
+			break;
+		}
+		case 1:
+		{
+			g_iType = 7;
+			break;
+		}
+		case 2:
+		{
+			g_iType = 10;
+			break;
+		}
+		case 3:
+		{
+			g_iType = 11;
+			break;
+		}
+		case 4:
+		{
+			g_iType = 13;
+			break;
+		}
 		}
 		hKv = hKv->FindKey("FakeRank", false);
 		FOR_EACH_VALUE(hKv, pValue)
@@ -90,7 +87,7 @@ void LoadConfig()
 	}
 }
 
-bool LR_FakeRank::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late)
+bool LR_FakeRank::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
@@ -111,8 +108,7 @@ bool LR_FakeRank::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, b
 
 CON_COMMAND_EXTERN(mm_reload_fakerank, ReloadCommand, "Reload Fakerank config");
 
-
-void ReloadCommand(const CCommandContext& context, const CCommand& args)
+void ReloadCommand(const CCommandContext &context, const CCommand &args)
 {
 	LoadConfig();
 }
@@ -137,25 +133,26 @@ void LR_FakeRank::AllPluginsLoaded()
 	{
 		g_SMAPI->Format(error, sizeof(error), "Missing Utils system plugin");
 		ConColorMsg(Color(255, 0, 0, 255), "[%s] %s\n", GetLogTag(), error);
-		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
+		std::string sBuffer = "meta unload " + std::to_string(g_PLID);
 		engine->ServerCommand(sBuffer.c_str());
 		return;
 	}
 
-	g_pLRCore = (ILRApi*)g_SMAPI->MetaFactory(LR_INTERFACE, &ret, NULL);
+	g_pLRCore = (ILRApi *)g_SMAPI->MetaFactory(LR_INTERFACE, &ret, NULL);
 	if (ret == META_IFACE_FAILED)
 	{
 		char error[64];
 		V_strncpy(error, "Failed to lookup lr core. Aborting", 64);
 		ConColorMsg(Color(255, 0, 0, 255), "[%s] %s\n", GetLogTag(), error);
-		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
+		std::string sBuffer = "meta unload " + std::to_string(g_PLID);
 		engine->ServerCommand(sBuffer.c_str());
 		return;
 	}
-	
+
 	g_pUtils->StartupServer(g_PLID, StartupServer);
 	g_pLRCore->HookOnCoreIsReady(g_PLID, CoreIsReady);
-	g_pUtils->CreateTimer(0.0f, []() {
+	g_pUtils->CreateTimer(0.0f, []()
+						  {
 		if(bLoaded)
 		{
 			int iCount = 0;
@@ -186,10 +183,14 @@ void LR_FakeRank::AllPluginsLoaded()
 					break;
 				}
 
-				uint64_t iButtons = pPawn->m_pMovementServices()->m_nButtons().m_pButtonStates()[0];
+				// FIX: Null pointer check for movement services to prevent crash
+				auto pMovementServices = pPawn->m_pMovementServices();
+				if (!pMovementServices) continue;
+
+				uint64_t iButtons = pMovementServices->m_nButtons().m_pButtonStates()[0];
 				if (iButtons & (1ULL << 33) && !(iOldButtons[i] & (1ULL << 33)))
 				{
-					filter.Set(CPlayerSlot(i));
+					filter.Set(i);
 					iCount++;
 				}
 				iOldButtons[i] = iButtons;
@@ -203,48 +204,46 @@ void LR_FakeRank::AllPluginsLoaded()
 				delete msg;
 			}
 		}
-		return 0.0f;
-	});
+		return 0.0f; });
 }
 
 ///////////////////////////////////////
-const char* LR_FakeRank::GetLicense()
+const char *LR_FakeRank::GetLicense()
 {
 	return "GPL";
 }
 
-const char* LR_FakeRank::GetVersion()
+const char *LR_FakeRank::GetVersion()
 {
 	return "1.1.0";
 }
 
-const char* LR_FakeRank::GetDate()
+const char *LR_FakeRank::GetDate()
 {
 	return __DATE__;
 }
 
-const char* LR_FakeRank::GetLogTag()
+const char *LR_FakeRank::GetLogTag()
 {
 	return "[LR-FR]";
 }
 
-const char* LR_FakeRank::GetAuthor()
+const char *LR_FakeRank::GetAuthor()
 {
 	return "Pisex";
 }
 
-const char* LR_FakeRank::GetDescription()
+const char *LR_FakeRank::GetDescription()
 {
 	return "[LR] FakeRank";
 }
 
-const char* LR_FakeRank::GetName()
+const char *LR_FakeRank::GetName()
 {
 	return "[LR] FakeRank";
 }
 
-const char* LR_FakeRank::GetURL()
+const char *LR_FakeRank::GetURL()
 {
 	return "https://discord.gg/g798xERK5Y";
 }
-
