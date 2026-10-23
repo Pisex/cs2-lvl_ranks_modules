@@ -3,7 +3,6 @@
 
 #include <ISmmPlugin.h>
 #include <igameevents.h>
-#include <iplayerinfo.h>
 #include "utlvector.h"
 #include "ehandle.h"
 #include <sh_vector.h>
@@ -15,12 +14,16 @@
 class CCSGameRules;
 #include "include/lvl_ranks.h"
 #include "include/menus.h"
+#include "include/players.h"
 #include "include/mysql_mm.h"
 #include <ctime>
 
-class lr_maps : public ISmmPlugin, public IMetamodListener
+class lr_maps : public ISmmPlugin, public IMetamodListener, public IServerListener, public IPlayerListener
 {
 public:
+	void ClientDisconnect(int iSlot) override;
+	void GameFramePost(bool bSimulating, bool bFirstTick, bool bLastTick) override;
+
 	bool Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late);
 	bool Unload(char *error, size_t maxlen);
 	void AllPluginsLoaded();
@@ -34,7 +37,7 @@ public:
 	const char *GetDate();
 	const char *GetLogTag();
 	void OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char *pszName, uint64 xuid, const char *pszNetworkID);
-	void GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
+	void GameFrame_Hook(bool simulating, bool bFirstTick, bool bLastTick);
 };
 
 extern lr_maps g_lr_maps;

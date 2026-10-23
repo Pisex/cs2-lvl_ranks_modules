@@ -35,13 +35,7 @@ char	g_sTableName[96],
 int g_iLastTime;
 
 PLUGIN_EXPOSE(lr_maps, g_lr_maps);
-SH_DECL_HOOK3_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
-SH_DECL_HOOK5_void(IServerGameClients, ClientDisconnect, SH_NOATTRIB, 0, CPlayerSlot, ENetworkDisconnectionReason, const char *, uint64, const char *);
 
-CGameEntitySystem* GameEntitySystem()
-{
-	return g_pUtils->GetCGameEntitySystem();
-};
 
 void StartupServer()
 {
@@ -50,36 +44,11 @@ void StartupServer()
 	g_SMAPI->Format(g_sCurrentNameMap, sizeof(g_sCurrentNameMap), "%s", g_pUtils->GetCGlobalVars()->mapname);
 }
 
-std::string ConvertSteamID(const char* usteamid) {
-    std::string steamid(usteamid);
+IPlayersApi* g_pPlayers = nullptr;
 
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), '['), steamid.end());
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), ']'), steamid.end());
-
-    std::stringstream ss(steamid);
-    std::string token;
-    std::vector<std::string> usteamid_split;
-
-    while (std::getline(ss, token, ':')) {
-        usteamid_split.push_back(token);
-    }
-
-    std::string steamid_parts[3] = { "STEAM_1:", "", "" };
-
-    int z = std::stoi(usteamid_split[2]);
-
-    if (z % 2 == 0) {
-        steamid_parts[1] = "0:";
-    } else {
-        steamid_parts[1] = "1:";
-    }
-
-    int steamacct = z / 2;
-    steamid_parts[2] = std::to_string(steamacct);
-
-    std::string result = steamid_parts[0] + steamid_parts[1] + steamid_parts[2];
-
-    return result;
+std::string GetClientAuth(int iSlot)
+{
+	return g_pPlayers ? g_pPlayers->GetSteamID2(iSlot) : std::string();
 }
 
 bool lr_maps::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
@@ -89,14 +58,13 @@ bool lr_maps::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool 
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetServerFactory, g_pSource2Server, ISource2Server, SOURCE2SERVER_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 	
-	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, g_pSource2GameClients, this, &lr_maps::OnClientDisconnect, true);
-	SH_ADD_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &lr_maps::GameFrame), true);
 	g_SMAPI->AddListener( this, this );
 	return true;
 }
 
-void lr_maps::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
+void lr_maps::GameFrame_Hook(bool simulating, bool bFirstTick, bool bLastTick)
 {
 	if(g_iLastTime == 0) g_iLastTime = std::time(0);
 	else if(std::time(0) - g_iLastTime >= 1)
@@ -117,8 +85,7 @@ void lr_maps::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 
 bool lr_maps::Unload(char *error, size_t maxlen)
 {
-	SH_REMOVE_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &lr_maps::GameFrame), true);
-	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, g_pSource2GameClients, this, &lr_maps::OnClientDisconnect, true);
+	if(g_pUtils) g_pUtils->ClearAllHooks(g_PLID);
 	delete g_pLRCore;
 	return true;
 }
@@ -146,7 +113,7 @@ void OnResetLoadedHook(int iSlot, const char* SteamID)
 void SaveDataPlayer(int iClient)
 {
 	char sQuery[1024];
-	g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_maps` SET `countplays` = %d, `kills` = %d, `deaths` = %d, `rounds_overall` = %d, `rounds_ct` = %d, `rounds_t` = %d, `bomb_planted` = %d, `bomb_defused` = %d, `hostage_rescued` = %d, `hostage_killed` = %d, `playtime` = %d WHERE `steam` = '%s' AND `name_map` = '%s';", g_sTableName, g_iMapCount_Play[iClient], g_iMapCount_Kills[iClient], g_iMapCount_Deaths[iClient], g_iMapCount_RoundsOverall[iClient], g_iMapCount_Round[iClient][0], g_iMapCount_Round[iClient][1], g_iMapCount_BPlanted[iClient], g_iMapCount_BDefused[iClient], g_iMapCount_HRescued[iClient], g_iMapCount_HKilled[iClient], g_iMapCount_Time[iClient], ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str(), g_sCurrentNameMap);
+	g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_maps` SET `countplays` = %d, `kills` = %d, `deaths` = %d, `rounds_overall` = %d, `rounds_ct` = %d, `rounds_t` = %d, `bomb_planted` = %d, `bomb_defused` = %d, `hostage_rescued` = %d, `hostage_killed` = %d, `playtime` = %d WHERE `steam` = '%s' AND `name_map` = '%s';", g_sTableName, g_iMapCount_Play[iClient], g_iMapCount_Kills[iClient], g_iMapCount_Deaths[iClient], g_iMapCount_RoundsOverall[iClient], g_iMapCount_Round[iClient][0], g_iMapCount_Round[iClient][1], g_iMapCount_BPlanted[iClient], g_iMapCount_BDefused[iClient], g_iMapCount_HRescued[iClient], g_iMapCount_HKilled[iClient], g_iMapCount_Time[iClient], GetClientAuth(iClient).c_str(), g_sCurrentNameMap);
 	g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 }
 
@@ -156,8 +123,9 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 	g_bPlayerActive[iSlot] = false;
 
 	g_SMAPI->Format(sQuery, sizeof(sQuery), "SELECT `countplays`, `kills`, `deaths`, `rounds_overall`, `rounds_ct`, `rounds_t`, `bomb_planted`, `bomb_defused`, `hostage_rescued`, `hostage_killed`, `playtime` FROM `%s_maps` WHERE `steam` = '%s' AND `name_map` = '%s';", g_sTableName, SteamID, g_sCurrentNameMap);
-	g_pConnection->Query(sQuery, [iSlot, SteamID](ISQLQuery* test){
-		ISQLResult* result = test->GetResultSet();
+	g_pConnection->Query(sQuery, [iSlot, SteamID = std::string(SteamID ? SteamID : "")](ISQLQuery* test){
+		ISQLResult* result = test ? test->GetResultSet() : nullptr;
+		if(!result) return;
 		if(!result->FetchRow())
 		{
 			char sQuery[512];
@@ -173,7 +141,7 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 			g_iMapCount_HRescued[iSlot] = 0;
 			g_iMapCount_HKilled[iSlot] = 0;
 			g_bPlayerActive[iSlot] = true;
-			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_maps` (`steam`, `name_map`, `countplays`, `kills`, `deaths`, `rounds_overall`, `rounds_ct`, `rounds_t`, `bomb_planted`, `bomb_defused`, `hostage_rescued`, `hostage_killed`, `playtime`) VALUES ('%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d');", g_sTableName, SteamID, g_sCurrentNameMap, g_iMapCount_Play[iSlot], g_iMapCount_Kills[iSlot], g_iMapCount_Deaths[iSlot], g_iMapCount_RoundsOverall[iSlot], g_iMapCount_Round[iSlot][0], g_iMapCount_Round[iSlot][1], g_iMapCount_BPlanted[iSlot], g_iMapCount_BDefused[iSlot], g_iMapCount_HRescued[iSlot], g_iMapCount_HKilled[iSlot], g_iMapCount_Time[iSlot]);
+			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_maps` (`steam`, `name_map`, `countplays`, `kills`, `deaths`, `rounds_overall`, `rounds_ct`, `rounds_t`, `bomb_planted`, `bomb_defused`, `hostage_rescued`, `hostage_killed`, `playtime`) VALUES ('%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d');", g_sTableName, SteamID.c_str(), g_sCurrentNameMap, g_iMapCount_Play[iSlot], g_iMapCount_Kills[iSlot], g_iMapCount_Deaths[iSlot], g_iMapCount_RoundsOverall[iSlot], g_iMapCount_Round[iSlot][0], g_iMapCount_Round[iSlot][1], g_iMapCount_BPlanted[iSlot], g_iMapCount_BDefused[iSlot], g_iMapCount_HRescued[iSlot], g_iMapCount_HKilled[iSlot], g_iMapCount_Time[iSlot]);
 			g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 		}
 		else
@@ -303,6 +271,15 @@ void lr_maps::AllPluginsLoaded()
 		return;
 	}
 
+	g_pPlayers = (IPlayersApi*)g_SMAPI->MetaFactory(PLAYERS_INTERFACE, &ret, NULL);
+	if (ret == META_IFACE_FAILED)
+	{
+		ConColorMsg(Color(255, 0, 0, 255), "[%s] Missing Players system plugin (Menus)\n", GetLogTag());
+		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
+		engine->ServerCommand(sBuffer.c_str());
+		return;
+	}
+
 	g_pUtils = (IUtilsApi*)g_SMAPI->MetaFactory(Utils_INTERFACE, &ret, NULL);
 	if (ret == META_IFACE_FAILED)
 	{
@@ -313,9 +290,12 @@ void lr_maps::AllPluginsLoaded()
 		engine->ServerCommand(sBuffer.c_str());
 		return;
 	}
+	g_pUtils->AddServerListener(g_PLID, this);
+	if (g_pPlayers) g_pPlayers->AddListener(g_PLID, this);
+
 	if(g_pLRCore->CoreIsLoaded()) OnCoreIsReadyHook();
 	else g_pLRCore->HookOnCoreIsReady(g_PLID, OnCoreIsReadyHook);
-	g_pUtils->StartupServer(g_PLID, StartupServer);
+	g_pUtils->StartupServer(g_PLID, ::StartupServer);
 	g_pUtils->HookEvent(g_PLID, "player_death", Hooks);
 	g_pUtils->HookEvent(g_PLID, "round_end", Hooks);
 	g_pUtils->HookEvent(g_PLID, "bomb_planted", Hooks);
@@ -362,4 +342,14 @@ const char *lr_maps::GetName()
 const char *lr_maps::GetURL()
 {
 	return "https://discord.com/invite/g798xERK5Y";
+}
+
+void lr_maps::ClientDisconnect(int iSlot)
+{
+	OnClientDisconnect(CPlayerSlot(iSlot), ENetworkDisconnectionReason(0), "", 0, "");
+}
+
+void lr_maps::GameFramePost(bool bSimulating, bool bFirstTick, bool bLastTick)
+{
+	GameFrame_Hook(bSimulating, bFirstTick, bLastTick);
 }

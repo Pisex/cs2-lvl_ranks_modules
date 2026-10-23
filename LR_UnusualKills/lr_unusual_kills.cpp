@@ -94,41 +94,12 @@ static const char* g_sNameUK[] = {"OP", "Penetrated", "NoScope", "Run", "Jump", 
 
 PLUGIN_EXPOSE(lr_unusual_kills, g_lr_unusual_kills);
 
-CGameEntitySystem* GameEntitySystem()
+
+IPlayersApi* g_pPlayers = nullptr;
+
+std::string GetClientAuth(int iSlot)
 {
-	return g_pUtils->GetCGameEntitySystem();
-};
-
-std::string ConvertSteamID(const char* usteamid) {
-    std::string steamid(usteamid);
-
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), '['), steamid.end());
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), ']'), steamid.end());
-
-    std::stringstream ss(steamid);
-    std::string token;
-    std::vector<std::string> usteamid_split;
-
-    while (std::getline(ss, token, ':')) {
-        usteamid_split.push_back(token);
-    }
-
-    std::string steamid_parts[3] = { "STEAM_1:", "", "" };
-
-    int z = std::stoi(usteamid_split[2]);
-
-    if (z % 2 == 0) {
-        steamid_parts[1] = "0:";
-    } else {
-        steamid_parts[1] = "1:";
-    }
-
-    int steamacct = z / 2;
-    steamid_parts[2] = std::to_string(steamacct);
-
-    std::string result = steamid_parts[0] + steamid_parts[1] + steamid_parts[2];
-
-    return result;
+	return g_pPlayers ? g_pPlayers->GetSteamID2(iSlot) : std::string();
 }
 
 void SplitString(const std::string &s, char delim, std::vector<std::string> &elems) {
@@ -196,6 +167,7 @@ bool lr_unusual_kills::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxl
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, g_pFullFileSystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 	g_SMAPI->AddListener( this, this );
 	
 	return true;
@@ -223,8 +195,9 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 {
 	char sQuery[1024];
 	g_SMAPI->Format(sQuery, sizeof(sQuery), SQL_LoadData, g_sTableName, SteamID);
-	g_pConnection->Query(sQuery, [iSlot, SteamID](ISQLQuery* test){
-		ISQLResult* result = test->GetResultSet();
+	g_pConnection->Query(sQuery, [iSlot, SteamID = std::string(SteamID ? SteamID : "")](ISQLQuery* test){
+		ISQLResult* result = test ? test->GetResultSet() : nullptr;
+		if(!result) return;
 		if(result->FetchRow())
 		{
 			for(int i = 0; i != MAX_UKTYPES;)
@@ -235,7 +208,7 @@ void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 		else 
 		{
 			char sQuery[512];
-			g_SMAPI->Format(sQuery, sizeof(sQuery), SQL_CreateData, g_sTableName, SteamID);
+			g_SMAPI->Format(sQuery, sizeof(sQuery), SQL_CreateData, g_sTableName, SteamID.c_str());
 			g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 
 			for(int i = 0; i != MAX_UKTYPES;)
@@ -345,7 +318,7 @@ void OnPlayerKilledPreHook(IGameEvent* pEvent, int &iExpCaused, int iExpVictim, 
 						if(sColumns[0])
 						{
 							sColumns[strlen(sColumns) - 2] = '\0';
-    						g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_unusualkills` SET %s WHERE `SteamID` = '%s';", g_sTableName, sColumns, ConvertSteamID(engine->GetPlayerNetworkIDString(iAttacker)).c_str());
+    						g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_unusualkills` SET %s WHERE `SteamID` = '%s';", g_sTableName, sColumns, GetClientAuth(iAttacker).c_str());
 							g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 						}
 					}
@@ -367,7 +340,7 @@ void OnDatabaseCleanupHook(int iType)
 			CCSPlayerController* pPlayer = CCSPlayerController::FromSlot(i);
 			if(pPlayer && pPlayer->GetPlayerPawn() && pPlayer->m_steamID() > 0)
 			{
-				OnResetLoadedHook(i, ConvertSteamID(engine->GetPlayerNetworkIDString(i)).c_str());
+				OnResetLoadedHook(i, GetClientAuth(i).c_str());
 			}
 		}
 	}
@@ -409,6 +382,15 @@ void lr_unusual_kills::AllPluginsLoaded()
 		char error[64];
 		V_strncpy(error, "Failed to lookup lr core. Aborting", 64);
 		ConColorMsg(Color(255, 0, 0, 255), "[%s] %s\n", GetLogTag(), error);
+		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
+		engine->ServerCommand(sBuffer.c_str());
+		return;
+	}
+
+	g_pPlayers = (IPlayersApi*)g_SMAPI->MetaFactory(PLAYERS_INTERFACE, &ret, NULL);
+	if (ret == META_IFACE_FAILED)
+	{
+		ConColorMsg(Color(255, 0, 0, 255), "[%s] Missing Players system plugin (Menus)\n", GetLogTag());
 		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
 		engine->ServerCommand(sBuffer.c_str());
 		return;

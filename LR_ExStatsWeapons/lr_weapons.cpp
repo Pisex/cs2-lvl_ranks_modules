@@ -29,43 +29,13 @@ bool	g_bWeaponsCoeffActive,
 char	g_sWeaponsClassName[96][64];
 
 PLUGIN_EXPOSE(lr_weapons, g_lr_weapons);
-SH_DECL_HOOK5_void(IServerGameClients, ClientDisconnect, SH_NOATTRIB, 0, CPlayerSlot, ENetworkDisconnectionReason, const char *, uint64, const char *);
 
-CGameEntitySystem* GameEntitySystem()
+
+IPlayersApi* g_pPlayers = nullptr;
+
+std::string GetClientAuth(int iSlot)
 {
-	return g_pUtils->GetCGameEntitySystem();
-};
-
-std::string ConvertSteamID(const char* usteamid) {
-    std::string steamid(usteamid);
-
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), '['), steamid.end());
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), ']'), steamid.end());
-
-    std::stringstream ss(steamid);
-    std::string token;
-    std::vector<std::string> usteamid_split;
-
-    while (std::getline(ss, token, ':')) {
-        usteamid_split.push_back(token);
-    }
-
-    std::string steamid_parts[3] = { "STEAM_1:", "", "" };
-
-    int z = std::stoi(usteamid_split[2]);
-
-    if (z % 2 == 0) {
-        steamid_parts[1] = "0:";
-    } else {
-        steamid_parts[1] = "1:";
-    }
-
-    int steamacct = z / 2;
-    steamid_parts[2] = std::to_string(steamacct);
-
-    std::string result = steamid_parts[0] + steamid_parts[1] + steamid_parts[2];
-
-    return result;
+	return g_pPlayers ? g_pPlayers->GetSteamID2(iSlot) : std::string();
 }
 
 void LoadSettings()
@@ -101,30 +71,30 @@ void SaveDataPlayer(int iClient, int weapon = -1)
 	{
 		if(g_bWeaponsNew[iClient][weapon])
 		{
-			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_weapons` (`steam`, `classname`, `kills`) VALUES ('%s', '%s', '%d');", g_sTableName, ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str(), g_sWeaponsClassName[weapon], g_iWeaponsStats[iClient][weapon]);
+			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_weapons` (`steam`, `classname`, `kills`) VALUES ('%s', '%s', '%d');", g_sTableName, GetClientAuth(iClient).c_str(), g_sWeaponsClassName[weapon], g_iWeaponsStats[iClient][weapon]);
 			g_bWeaponsNew[iClient][weapon] = false;
 		}
 		else
 		{
-			g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_weapons` SET `kills` = %d WHERE `steam` = '%s' AND `classname` = '%s';", g_sTableName, g_iWeaponsStats[iClient][weapon], ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str(), g_sWeaponsClassName[weapon]);
+			g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_weapons` SET `kills` = %d WHERE `steam` = '%s' AND `classname` = '%s';", g_sTableName, g_iWeaponsStats[iClient][weapon], GetClientAuth(iClient).c_str(), g_sWeaponsClassName[weapon]);
 		}
 
 		g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 	}
 	else
 	{
-		for(int i; i != g_iCountWeapons; i++)
+		for(int i = 0; i < g_iCountWeapons; i++)
 		{
 			if(g_iWeaponsStats[iClient][i])
 			{
 				if(g_bWeaponsNew[iClient][i])
 				{
-					g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_weapons` (`steam`, `classname`, `kills`) VALUES ('%s', '%s', '%d');", g_sTableName, ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str(), g_sWeaponsClassName[i], g_iWeaponsStats[iClient][i]);
+					g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_weapons` (`steam`, `classname`, `kills`) VALUES ('%s', '%s', '%d');", g_sTableName, GetClientAuth(iClient).c_str(), g_sWeaponsClassName[i], g_iWeaponsStats[iClient][i]);
 					g_bWeaponsNew[iClient][i] = false;
 				}
 				else
 				{
-					g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_weapons` SET `kills` = %d WHERE `steam` = '%s' AND `classname` = '%s';", g_sTableName, g_iWeaponsStats[iClient][i], ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str(), g_sWeaponsClassName[i]);
+					g_SMAPI->Format(sQuery, sizeof(sQuery), "UPDATE `%s_weapons` SET `kills` = %d WHERE `steam` = '%s' AND `classname` = '%s';", g_sTableName, g_iWeaponsStats[iClient][i], GetClientAuth(iClient).c_str(), g_sWeaponsClassName[i]);
 				}
 
 				g_pConnection->Query(sQuery, [](ISQLQuery* test){});
@@ -140,7 +110,7 @@ bool lr_weapons::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bo
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, g_pFullFileSystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
-	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, g_pSource2GameClients, this, &lr_weapons::OnClientDisconnect, true);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 	g_SMAPI->AddListener( this, this );
 	
 	return true;
@@ -157,7 +127,7 @@ void lr_weapons::OnClientDisconnect( CPlayerSlot slot, ENetworkDisconnectionReas
 
 bool lr_weapons::Unload(char *error, size_t maxlen)
 {
-	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, g_pSource2GameClients, this, &lr_weapons::OnClientDisconnect, true);
+	if(g_pUtils) g_pUtils->ClearAllHooks(g_PLID);
 	delete g_pLRCore;
 	return true;
 }
@@ -177,7 +147,7 @@ void OnResetLoadedHook(int iSlot, const char* SteamID)
 void OnPlayerLoadedHook(int iSlot, const char* SteamID)
 {
 	char sQuery[1024];
-	for(int i; i != g_iCountWeapons; i++)
+	for(int i = 0; i < g_iCountWeapons; i++)
 	{
 		g_SMAPI->Format(sQuery, sizeof(sQuery), "SELECT `kills` FROM `%s_weapons` WHERE `classname` = '%s' AND `steam` = '%s'", g_sTableName, g_sWeaponsClassName[i], SteamID);
 		g_pConnection->Query(sQuery, [iSlot, i](ISQLQuery* test){
@@ -218,7 +188,7 @@ void OnPlayerKilledPreHook(IGameEvent* pEvent, int &iExpCaused, int iExpVictim, 
 				g_SMAPI->Format(sClassname, sizeof(sClassname), "weapon_knife");
 			}
 
-			for(int i; i != g_iCountWeapons; i++)
+			for(int i = 0; i < g_iCountWeapons; i++)
 			{
 				if(!strcmp(sClassname, g_sWeaponsClassName[i]) && g_hWeapons.find(sClassname) != g_hWeapons.end())
 				{
@@ -249,7 +219,7 @@ void OnDatabaseCleanupHook(int iType)
 			CCSPlayerController* pPlayer = CCSPlayerController::FromSlot(i);
 			if(pPlayer && pPlayer->GetPlayerPawn() && pPlayer->m_steamID() > 0)
 			{
-				OnResetLoadedHook(i, ConvertSteamID(engine->GetPlayerNetworkIDString(i)).c_str());
+				OnResetLoadedHook(i, GetClientAuth(i).c_str());
 			}
 		}
 	}
@@ -290,6 +260,15 @@ void lr_weapons::AllPluginsLoaded()
 		return;
 	}
 
+	g_pPlayers = (IPlayersApi*)g_SMAPI->MetaFactory(PLAYERS_INTERFACE, &ret, NULL);
+	if (ret == META_IFACE_FAILED)
+	{
+		ConColorMsg(Color(255, 0, 0, 255), "[%s] Missing Players system plugin (Menus)\n", GetLogTag());
+		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
+		engine->ServerCommand(sBuffer.c_str());
+		return;
+	}
+
 	g_pUtils = (IUtilsApi*)g_SMAPI->MetaFactory(Utils_INTERFACE, &ret, NULL);
 	if (ret == META_IFACE_FAILED)
 	{
@@ -300,6 +279,8 @@ void lr_weapons::AllPluginsLoaded()
 		engine->ServerCommand(sBuffer.c_str());
 		return;
 	}
+	if (g_pPlayers) g_pPlayers->AddListener(g_PLID, this);
+
 	if(g_pLRCore->CoreIsLoaded()) OnCoreIsReadyHook();
 	else g_pLRCore->HookOnCoreIsReady(g_PLID, OnCoreIsReadyHook);
 	g_pUtils->StartupServer(g_PLID, [](){
@@ -346,4 +327,9 @@ const char *lr_weapons::GetName()
 const char *lr_weapons::GetURL()
 {
 	return "https://discord.com/invite/g798xERK5Y";
+}
+
+void lr_weapons::ClientDisconnect(int iSlot)
+{
+	OnClientDisconnect(CPlayerSlot(iSlot), ENetworkDisconnectionReason(0), "", 0, "");
 }

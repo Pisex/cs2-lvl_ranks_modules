@@ -4,7 +4,7 @@
 #include <networksystem/inetworkmessages.h>
 #include <inetchannel.h>
 #include "schemasystem/schemasystem.h"
-#include "protobuf/generated/cstrike15_usermessages.pb.h"
+#include "cstrike15_usermessages.pb.h"
 
 LR_FakeRank g_LR_FakeRank;
 PLUGIN_EXPOSE(LR_FakeRank, g_LR_FakeRank);
@@ -25,12 +25,6 @@ int g_iType;
 bool bLoaded = false;
 std::map<int, int> g_Ranks;
 
-SH_DECL_HOOK3_void(IServerGameDLL, GameFrame, SH_NOATTRIB, 0, bool, bool, bool);
-
-CGameEntitySystem *GameEntitySystem()
-{
-	return g_pUtils->GetCGameEntitySystem();
-}
 
 void StartupServer()
 {
@@ -101,8 +95,8 @@ bool LR_FakeRank::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, b
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pNetworkServerService, INetworkServerService, NETWORKSERVERSERVICE_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceService, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, g_pFullFileSystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 
-	SH_ADD_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &LR_FakeRank::GameFrame), true);
 
 	ConVar_Register(FCVAR_RELEASE | FCVAR_SERVER_CAN_EXECUTE | FCVAR_GAMEDLL);
 
@@ -119,14 +113,14 @@ void ReloadCommand(const CCommandContext &context, const CCommand &args)
 
 bool LR_FakeRank::Unload(char *error, size_t maxlen)
 {
-	SH_REMOVE_HOOK(IServerGameDLL, GameFrame, g_pSource2Server, SH_MEMBER(this, &LR_FakeRank::GameFrame), true);
+	if(g_pUtils) g_pUtils->ClearAllHooks(g_PLID);
 	return true;
 }
 
-void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
+void LR_FakeRank::GameFrame_Hook(bool simulating, bool bFirstTick, bool bLastTick)
 {
 	if(!bLoaded)
-		RETURN_META(MRES_IGNORED);
+		return;
 
 	int iCount = 0;
 	CPlayerBitVec filter;
@@ -160,7 +154,7 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 		auto pMovementServices = pPawn->m_pMovementServices();
 		if (!pMovementServices) continue;
 
-		uint64_t iButtons = pMovementServices->m_nButtons().m_pButtonStates()[0];
+		uint64_t iButtons = pMovementServices->m_nButtons().m_pButtonStates[0];
 		if (iButtons & (1ULL << 33) && !(iOldButtons[i] & (1ULL << 33)))
 		{
 			filter.Set(i);
@@ -176,7 +170,7 @@ void LR_FakeRank::GameFrame(bool simulating, bool bFirstTick, bool bLastTick)
 		g_pGameEventSystem->PostEventAbstract(-1, false, ABSOLUTE_PLAYER_LIMIT, reinterpret_cast<const uint64*>(filter.Base()), netmsg, msg, 0, NetChannelBufType_t::BUF_RELIABLE);
 		delete msg;
 	}
-	RETURN_META(MRES_IGNORED);
+	return;
 }
 
 void CoreIsReady()
@@ -198,6 +192,8 @@ void LR_FakeRank::AllPluginsLoaded()
 		engine->ServerCommand(sBuffer.c_str());
 		return;
 	}
+	g_pUtils->AddServerListener(g_PLID, this);
+
 
 	g_pLRCore = (ILRApi *)g_SMAPI->MetaFactory(LR_INTERFACE, &ret, NULL);
 	if (ret == META_IFACE_FAILED)
@@ -210,7 +206,7 @@ void LR_FakeRank::AllPluginsLoaded()
 		return;
 	}
 
-	g_pUtils->StartupServer(g_PLID, StartupServer);
+	g_pUtils->StartupServer(g_PLID, ::StartupServer);
 	g_pLRCore->HookOnCoreIsReady(g_PLID, CoreIsReady);
 }
 
@@ -253,4 +249,9 @@ const char *LR_FakeRank::GetName()
 const char *LR_FakeRank::GetURL()
 {
 	return "https://discord.gg/g798xERK5Y";
+}
+
+void LR_FakeRank::GameFramePost(bool bSimulating, bool bFirstTick, bool bLastTick)
+{
+	GameFrame_Hook(bSimulating, bFirstTick, bLastTick);
 }

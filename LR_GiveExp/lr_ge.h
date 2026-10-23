@@ -2,8 +2,7 @@
 #define _INCLUDE_METAMOD_SOURCE_STUB_PLUGIN_H_
 
 #include <ISmmPlugin.h>
-#include <igameevents.h>
-#include <iplayerinfo.h>
+#include <igameevents.h> 
 #include "utlvector.h"
 #include "ehandle.h"
 #include <sh_vector.h>

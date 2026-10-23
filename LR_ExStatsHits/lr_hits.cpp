@@ -35,38 +35,12 @@ int g_iHits[64][HitData],
 char g_sTableName[32];
 
 PLUGIN_EXPOSE(lr_hits, g_lr_hits);
-SH_DECL_HOOK5_void(IServerGameClients, ClientDisconnect, SH_NOATTRIB, 0, CPlayerSlot, ENetworkDisconnectionReason, const char *, uint64, const char *);
 
-std::string ConvertSteamID(const char* usteamid) {
-    std::string steamid(usteamid);
+IPlayersApi* g_pPlayers = nullptr;
 
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), '['), steamid.end());
-    steamid.erase(std::remove(steamid.begin(), steamid.end(), ']'), steamid.end());
-
-    std::stringstream ss(steamid);
-    std::string token;
-    std::vector<std::string> usteamid_split;
-
-    while (std::getline(ss, token, ':')) {
-        usteamid_split.push_back(token);
-    }
-
-    std::string steamid_parts[3] = { "STEAM_1:", "", "" };
-
-    int z = std::stoi(usteamid_split[2]);
-
-    if (z % 2 == 0) {
-        steamid_parts[1] = "0:";
-    } else {
-        steamid_parts[1] = "1:";
-    }
-
-    int steamacct = z / 2;
-    steamid_parts[2] = std::to_string(steamacct);
-
-    std::string result = steamid_parts[0] + steamid_parts[1] + steamid_parts[2];
-
-    return result;
+std::string GetClientAuth(int iSlot)
+{
+	return g_pPlayers ? g_pPlayers->GetSteamID2(iSlot) : std::string();
 }
 
 bool lr_hits::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
@@ -74,14 +48,13 @@ bool lr_hits::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool 
 	PLUGIN_SAVEVARS();
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
-	SH_ADD_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, g_pSource2GameClients, this, &lr_hits::OnClientDisconnect, true);
 	g_SMAPI->AddListener( this, this );
 	return true;
 }
 
 bool lr_hits::Unload(char *error, size_t maxlen)
 {
-	SH_REMOVE_HOOK_MEMFUNC(IServerGameClients, ClientDisconnect, g_pSource2GameClients, this, &lr_hits::OnClientDisconnect, true);
+	if(g_pUtils) g_pUtils->ClearAllHooks(g_PLID);
 	delete g_pLRCore;
 	return true;
 }
@@ -131,13 +104,14 @@ FROM \
 	`%s_hits` \
 WHERE \
 	`SteamID` = '%s';", g_sTableName, SteamID);
-	g_pConnection->Query(sQuery, [iSlot, SteamID](ISQLQuery* test){
-		ISQLResult* result = test->GetResultSet();
+	g_pConnection->Query(sQuery, [iSlot, SteamID = std::string(SteamID ? SteamID : "")](ISQLQuery* test){
+		ISQLResult* result = test ? test->GetResultSet() : nullptr;
+		if(!result) return;
 		bool bLoadData = true;
 		if(!result->FetchRow())
 		{
 			char sQuery[128];
-			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_hits` (`SteamID`) VALUES ('%s');", g_sTableName, SteamID);
+			g_SMAPI->Format(sQuery, sizeof(sQuery), "INSERT INTO `%s_hits` (`SteamID`) VALUES ('%s');", g_sTableName, SteamID.c_str());
 			g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 			bLoadData = false;
 		}
@@ -179,7 +153,7 @@ void SaveData(int iClient)
 		`DmgArmor` = %d, \
 		%s \
 	WHERE \
-		`SteamID` = '%s'", g_sTableName, g_iHits[iClient][HD_DmgHealth], g_iHits[iClient][HD_DmgArmor], sColumns, ConvertSteamID(engine->GetPlayerNetworkIDString(iClient)).c_str());
+		`SteamID` = '%s'", g_sTableName, g_iHits[iClient][HD_DmgHealth], g_iHits[iClient][HD_DmgArmor], sColumns, GetClientAuth(iClient).c_str());
 		g_pConnection->Query(sQuery, [](ISQLQuery* test){});
 
 		g_iHitFlags[iClient] = 0;
@@ -251,6 +225,15 @@ void lr_hits::AllPluginsLoaded()
 		return;
 	}
 
+	g_pPlayers = (IPlayersApi*)g_SMAPI->MetaFactory(PLAYERS_INTERFACE, &ret, NULL);
+	if (ret == META_IFACE_FAILED)
+	{
+		ConColorMsg(Color(255, 0, 0, 255), "[%s] Missing Players system plugin (Menus)\n", GetLogTag());
+		std::string sBuffer = "meta unload "+std::to_string(g_PLID);
+		engine->ServerCommand(sBuffer.c_str());
+		return;
+	}
+
 	g_pUtils = (IUtilsApi*)g_SMAPI->MetaFactory(Utils_INTERFACE, &ret, NULL);
 	if (ret == META_IFACE_FAILED)
 	{
@@ -261,6 +244,8 @@ void lr_hits::AllPluginsLoaded()
 		engine->ServerCommand(sBuffer.c_str());
 		return;
 	}
+	if (g_pPlayers) g_pPlayers->AddListener(g_PLID, this);
+
 	if(g_pLRCore->CoreIsLoaded()) OnCoreIsReadyHook();
 	else g_pLRCore->HookOnCoreIsReady(g_PLID, OnCoreIsReadyHook);
 	g_pUtils->HookEvent(g_PLID, "player_hurt", OnPlayerHurt);
@@ -304,4 +289,9 @@ const char *lr_hits::GetName()
 const char *lr_hits::GetURL()
 {
 	return "https://discord.com/invite/g798xERK5Y";
+}
+
+void lr_hits::ClientDisconnect(int iSlot)
+{
+	OnClientDisconnect(CPlayerSlot(iSlot), ENetworkDisconnectionReason(0), "", 0, "");
 }

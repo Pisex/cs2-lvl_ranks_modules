@@ -3,7 +3,6 @@
 
 #include <ISmmPlugin.h>
 #include <igameevents.h>
-#include <iplayerinfo.h>
 #include "utlvector.h"
 #include "ehandle.h"
 #include <sh_vector.h>
@@ -15,6 +14,7 @@ class CCSGameRules;
 #include "iserver.h"
 #include "include/lvl_ranks.h"
 #include "include/menus.h"
+#include "include/players.h"
 #include "include/mysql_mm.h"
 #include <ctime>
 
